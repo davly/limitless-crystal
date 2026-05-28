@@ -1,0 +1,21 @@
+name: limitless-crystal
+version: 0.1.0
+
+authors:
+  - David Carson
+
+description: |
+  Cohort-canonical Crystal SDK -- L43 Mirror-Mark v1 + R143 LOUD-ONCE +
+  R166 LIABILITY-FOOTER + UK GDPR refs. KAT-1 byte-identical to the Go
+  canonical foundation/pkg/mirrormark.
+
+license: Apache-2.0
+
+crystal: ">= 1.0.0"
+
+targets:
+  limitless-crystal:
+    main: src/limitless_crystal.cr
+
+repository: https://github.com/davly/limitless-crystal
+homepage: https://github.com/davly/limitless-crystal
