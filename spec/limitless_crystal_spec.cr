@@ -120,6 +120,51 @@ describe Limitless::MirrorMark do
         Limitless::MirrorMark.verify("lore@v1:abc", Bytes.new(32, 0_u8), Bytes.empty, Bytes.empty)
       end
     end
+
+    # --- base64url strict-alphabet decode (verify-path malleability fix) ---
+    #
+    # Canonical Go (foundation/pkg/mirrormark/verifier.go) uses
+    # base64.RawURLEncoding which STRICTLY rejects '+', '/' and '=' padding.
+    # The dedicated CLIs do likewise (lore-mark-verify-ts /^[A-Za-z0-9_-]*$/;
+    # lore-mark-verify-py rejects '+' '/' '='). Crystal's prior decode did
+    # `s.tr("-_","+/")` which only rewrote the url-safe glyphs, leaving any
+    # standard-alphabet '+' '/' (or '=') to pass UNCHANGED into the permissive
+    # Base64.decode -> input malleability (many distinct mark strings verifying
+    # the same body) on a verify path.
+    #
+    # KAT (derived offline; corpus=sha256("corpus1"), payload="", key="k"):
+    #   valid RawURL mark : lore@v1:2Lwb_PJL-2ezXsFNcUqYZ2IgODDFnrPCp36BB9JE6djHB15vYyp2Tg
+    #   std-alphabet twin : lore@v1:2Lwb/PJL+2ezXsFNcUqYZ2IgODDFnrPCp36BB9JE6djHB15vYyp2Tg
+    #   padded twin       : lore@v1:2Lwb_PJL-2ezXsFNcUqYZ2IgODDFnrPCp36BB9JE6djHB15vYyp2Tg==
+    describe "base64url strict alphabet (verify-path malleability)" do
+      valid_mark   = "lore@v1:2Lwb_PJL-2ezXsFNcUqYZ2IgODDFnrPCp36BB9JE6djHB15vYyp2Tg"
+      std_mark     = "lore@v1:2Lwb/PJL+2ezXsFNcUqYZ2IgODDFnrPCp36BB9JE6djHB15vYyp2Tg"
+      padded_mark  = "lore@v1:2Lwb_PJL-2ezXsFNcUqYZ2IgODDFnrPCp36BB9JE6djHB15vYyp2Tg=="
+      corpus       = hex("d8bc1bfcf24bfb6747210ebfabfa34c37bb3bb01f33cef9af9f3967b51929902")
+      payload      = Bytes.empty
+      key          = "k".to_slice
+
+      it "verifies the valid RawURL-encoded mark (round-trip)" do
+        Limitless::MirrorMark.verify(valid_mark, corpus, payload, key)
+      end
+
+      it "rejects a standard-alphabet ('+' '/') mark as malformed" do
+        expect_raises(Limitless::MirrorMark::MalformedMarkError) do
+          Limitless::MirrorMark.verify(std_mark, corpus, payload, key)
+        end
+      end
+
+      it "rejects a padded ('=') mark as malformed" do
+        expect_raises(Limitless::MirrorMark::MalformedMarkError) do
+          Limitless::MirrorMark.verify(padded_mark, corpus, payload, key)
+        end
+      end
+
+      it "verify_bool is false for the standard-alphabet twin but true for valid" do
+        Limitless::MirrorMark.verify_bool(std_mark, corpus, payload, key).should be_false
+        Limitless::MirrorMark.verify_bool(valid_mark, corpus, payload, key).should be_true
+      end
+    end
   end
 
   # ---------------------------------------------------------------------------

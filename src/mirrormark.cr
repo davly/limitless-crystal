@@ -130,7 +130,22 @@ module Limitless
       Base64.urlsafe_encode(data, padding: false)
     end
 
+    # Strict RFC 4648 base64url (no padding) alphabet. The encoded mark body
+    # MUST contain only [A-Za-z0-9_-]; standard-alphabet '+' / '/' and any '='
+    # padding are REJECTED. This mirrors the canonical Go verifier
+    # (foundation/pkg/mirrormark/verifier.go uses base64.RawURLEncoding, which
+    # is strict) and the dedicated CLIs (lore-mark-verify-ts /^[A-Za-z0-9_-]*$/;
+    # lore-mark-verify-py rejects '+' '/' '='). Without this guard, Crystal's
+    # `s.tr("-_","+/")` only rewrites the url-safe glyphs, so a standard-alphabet
+    # (or padded) mark would decode unchanged -> input malleability on a verify
+    # path (many distinct mark strings verifying the same body).
+    BASE64URL_ALPHABET = /\A[A-Za-z0-9_-]*\z/
+
     private def self.base64url_decode(s : String) : Bytes?
+      # Reject anything outside the url-safe, no-padding alphabet BEFORE decode.
+      # This explicitly rejects '+', '/' and '=' (padding) that Crystal's
+      # permissive Base64.decode would otherwise accept.
+      return nil unless s.matches?(BASE64URL_ALPHABET)
       begin
         Base64.decode(s.tr("-_", "+/").ljust((s.size + 3) // 4 * 4, '='))
       rescue Base64::Error
